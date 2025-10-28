@@ -1,0 +1,706 @@
+---
+title: "Packaging your code into an R package"
+author: "Charlotte Soneson, Michael Stadler"
+date: today
+toc: true
+format: 
+    html:
+        embed-resources: true
+editor: 
+  markdown: 
+    wrap: sentence
+---
+
+# Disclaimer
+
+The "Packaging your code into an R package" workshop is based on Charlotte Soneson's "From user to developer - the why and how of packaging your code" lecture available from [https://csoneson.github.io/PackagingLecture2025/packaging-code.html](https://csoneson.github.io/PackagingLecture2025/packaging-code.html) and is licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
+
+# Introduction
+
+Whenever we perform computational analysis of biological data, we use software packages.
+Sometimes these are built and sold to us by big companies, typically the same ones that manufacture the machines used to generate the data.
+However, in many cases, the software packages we use are built by independent researchers, and distributed to be used by others.
+
+![Source: https://xkcd.com/2347/](screenshots/xkcd-2347-dependency.png){fig-align="center" width="400"}
+
+In this lecture, we will discuss why it is a good idea to structure and package (and possibly even distribute) your own code, and provide some ideas on how you can start the path from being a user of tools to becoming a developer yourself.
+We will focus on the R language, and show in practice the steps one would go through to turn existing code into a package which is installable by others.
+Most of the concepts are directly transferable to other languages, such as Python; however, the packaging system in R is arguably more standardized and more tooling is available to help you with the packaging, so we use that as an example. We will however mention or provide links to corresponding information for Python packages where appropriate.
+
+# Functions
+
+The first step towards structuring your code is often to start writing *functions*.
+Functions are, effectively, recipes that take a set of input arguments, apply a prescribed sequence of operations to these, and return the results.
+Let's say, for example, that we have defined a complex transformation defined by the following rule:
+
+$$x \mapsto \frac{\log(3x^2)}{\sqrt{x}}$$
+
+and that we need to repeatedly apply this to numbers at various places in our analysis workflow.
+One option would be to write out the transformation explicitly each time we would like to apply it.
+One disadvantage of that appears if we, for some reason, would need to modify the transformation - say, to replace the 3 with a 4 in the numerator above.
+In this case, we need to make sure that we find all the places in the code where the transformation is applied, and make the change everywhere.
+
+The other option would be to define a function, which applies this transformation.
+In R, this would be done as follows:
+
+```{r}
+transf <- function(x) {
+    log(3 * x ^ 2) / sqrt(x)
+}
+```
+
+After defining this function, we can simply call it at each place in the code where we want to apply our transformation.
+
+```{r}
+transf(2)
+```
+
+If we need to change the transformation, we only need to change it in one place (in the function definition), and this will propagate to wherever the function is called.
+Collecting code in functions is therefore an excellent way of following the DRY (don't repeat yourself) practice in software development, and can be helpful regardless of whether one is developing software packages or writing code to analyze data.
+
+In reality, most functions are larger than the one we showed above, and often perform several analysis steps (say, normalization, parameter estimation and differential expression analysis).
+When designing a function, it is worth thinking about the scope.
+Ideally, each function should do one, well-defined thing.
+This makes it easier to generate modular code (where building blocks can be combined in different ways), and also makes testing and bug finding much easier.
+
+In practical data analysis, it may be tempting to think that a particular analysis is a "one-off", and something that will never be done exactly that way again.
+This, by experience, is very rarely the case.
+There will be many situations where you will have to go back to code you wrote a long time ago, to modify an analysis, add new samples, or apply the same approach to another data set.
+Thus, writing clean, structured code and functions from the start can in fact save you lots of time, even if it takes a little bit longer in that moment.
+
+![Source: https://xkcd.com/844/](screenshots/xkcd-844-good-code.png){fig-align="center" width="400"}
+
+# Documentation
+
+Whenever you have to share a function (and this includes with your future self!), documentation becomes essential.
+It should be clear from the documentation (without having to actually look into the code) what the function does, what type of inputs it expects, and what it returns.
+There should also be a note about what other software packages the function requires in order to function correctly.
+Different languages have different ways of encoding this type of documentation - for Python, you would write a *docstring*, while for R, the *roxygen* preamble is a common way to capture it.
+
+Here is an example of a short Python function with a docstring:
+
+```{python}
+#| eval: false
+def square(n):
+    '''
+    Take a number n and return the square of n.
+    
+        Parameters:
+            n (int or float): A numeric value
+        
+        Returns:
+            The square root of n
+    '''
+    return n**2
+```
+
+And here one of an R function with a roxygen preamble (we will see this in more detail later):
+
+```{r}
+#| eval: false
+#' Square of a number
+#' 
+#' Take a numeric vector \code{n} and calculate the square of each element.
+#'
+#' @param n A numeric vector
+#' 
+#' @return A numeric vector giving the sqaured values of the input vector.
+#' 
+#' @export
+#' 
+#' @examples
+#' square(1:3)
+square <- function(n) {
+    return(n^2)
+}
+```
+
+If you include such documentations for your functions, it can later be accessed using `print(square.__doc__)` in Python or `?square` in R (here assuming that the function is part of a package and the function documentation has been generated from the roxygen preamble).
+
+# Beyond single functions
+
+As you start collecting multiple functions that each do a single, well-defined thing, the question arises on how to structure these.
+Do you put them all in a single script?
+In multiple scripts (if so, how do you make sure that you keep them all together so that you can use them in a future project)?
+How do you encode the dependencies between them, and make sure that any external dependencies are available?
+
+This is where packaging comes into the picture.
+A *package* (or *library*, or *module*, depending on the language) is a collection of functions, which are distributed together as a bundle.
+The package also contains the documentation of all those functions, and a list of all the dependencies that need to be available for them to work.
+Packages can also contain other components, such as automatic tests that make sure that the functions work as expected, and information about who wrote the package and how you are allowed to use it (copyright and license information).
+
+Next, we will see how to construct an R package from scratch, starting from a couple of very small functions. 
+
+# Let's build an R package!
+
+## Starting point
+
+Let's assume that we have written two functions, defined below.
+One of them (`say_hello`) takes a string representing a name as input, and prints out a greeting for that name.
+The other (`get_age_in_days`) takes a number representing the age of a person in years, and calculates the number of days that corresponds to by multiplying by 365.25 and rounding the result to the nearest integer.
+
+```{r}
+say_hello <- function(name) {
+    message("Hello ", name, "!")
+}
+
+get_age_in_days <- function(age_years) {
+    round(age_years * 365.25)
+}
+```
+
+```{r}
+say_hello("Charlotte")
+get_age_in_days(23)
+```
+
+## Set up the package skeleton
+
+Today, there are several ways of setting up the skeleton for a new R package in an automated fashion.
+We will do it by creating a new *RStudio Project* - for this, we open RStudio, click on the arrow next to `Project (None)` (or the name of the current project) in the top right corner, and choose `New Project`.
+
+![](screenshots/01_new_project.png)
+
+Then, we select `New Directory`:
+
+![](screenshots/02_new_directory.png)
+
+We tell RStudio that we want the project to correspond to an `R Package`:
+
+![](screenshots/03_r_package.png)
+
+And finally we provide some details, including the name we want to give our package and where it should be stored.
+Also make sure to activate the checkbox next to "Create a git repository":
+
+![](screenshots/04_create_r_package.png)
+
+After clicking `Create Project`, RStudio will open a new session, with a package skeleton set up for us.
+
+![](screenshots/05_package_skeleton.png)
+
+Before starting to add our own code, we remove some of the example code that we don't want to include (we will replace this with our own files):
+
+-   The `R/hello.R` script. We will generate our own R scripts with functions.
+-   The `man/hello.Rd` file. This is the documentation corresponding to the removed example function.
+-   `NAMESPACE`. This is a list of functions that are exported from, and imported by, the package, which will be automatically regenerated later.
+
+## Adding package metadata
+
+Next, let's start editing the package files with our own information.
+We start with the `DESCRIPTION` file, which contains the high-level metadata about our package:
+
+::: {.callout-tip appearance="simple" icon="false"}
+```         
+Package: exampleRPackage
+Type: Package
+Title: What the Package Does (Title Case)
+Version: 0.1.0
+Authors@R: c(
+    person(
+      "Jane", "Doe",
+      email = "jane@example.com",
+      role = c("aut", "cre")
+    )
+  )
+Description: More about what it does (maybe more than one line).
+    Continuation lines should be indented.
+License: What license is it under?
+Encoding: UTF-8
+LazyData: true
+```
+:::
+
+Python packages contain similar information, typically in the a file called `pyproject.toml` (see [https://packaging.python.org/en/latest/guides/writing-pyproject-toml/](https://packaging.python.org/en/latest/guides/writing-pyproject-toml/) for more details).
+
+After editing it with our specific information, it could look something like this (let's leave the `License` field for a moment):
+
+::: {.callout-tip appearance="simple" icon="false"}
+```         
+Package: exampleRPackage
+Type: Package
+Title: Super Useful Stuff
+Version: 0.1.0
+Date: 2025-11-18
+Authors@R: c(
+    person(
+        "Charlotte", "Soneson",
+        email = "charlottesoneson@gmail.com", 
+        role = c("aut", "cre"),
+        comment = c(ORCID = "0000-0003-3833-2169")
+    )
+  )
+Description: Provides super useful functions that will be helpful in 
+    all future projects.
+License: What license is it under?
+Encoding: UTF-8
+LazyData: true
+```
+:::
+
+We set the initial package version to `0.1.0` (see [this Wikipedia link](https://en.wikipedia.org/wiki/Software_versioning) for more details about the three-number license format and meaning).
+It is good practice to bump the version number every time a significant change it made to the package, both in order to alert users of changes and for reproducibility reasons - it is expected that if the same version of a package is used, the same results will be obtained.
+
+To decide on a license, consult e.g. [this page](https://opensource.org/licenses).
+This is an important consideration if you are planning on making your package public, as it regulates how others may use the code.
+For now, we will choose the MIT license.
+The most straightforward way of adding all the required information is via the `usethis` package, which provides a large number of convenience functions that are helpful during package development.
+We add the license information as follows:
+
+```{r}
+#| eval: false
+
+usethis::use_mit_license(copyright_holder = "Friedrich Miescher Institute for Biomedical Research")
+```
+
+Note that we specify also the copyright holder.
+Depending on where you work, this may be you and your co-authors, or your employer.
+
+`usethis` will print out helpful messages of what it's doing in the R console:
+
+::: {.callout-note appearance="simple" icon="false"}
+```         
+> usethis::use_mit_license(copyright_holder = "Friedrich Miescher Institute for Biomedical Research")
+✔ Setting active project to
+  "/Users/charlottesoneson/Desktop/exampleRPackage".
+✔ Adding "MIT + file LICENSE" to License.
+✔ Writing LICENSE.
+✔ Writing LICENSE.md.
+✔ Adding "^LICENSE\\.md$" to .Rbuildignore.
+```
+:::
+
+We see that it has modified the `License` field in the `DESCRIPTION` file, and additionally added two files (`LICENSE` and `LICENSE.md`) containing the copyright information and the text of the chosen license.
+
+## Add R code
+
+Now, let's add our two functions to our package.
+To do this, we first create a new file `R/say_hello.R`, and paste our `say_hello` function in there.
+Next, we need to add documentation.
+As mentioned above, we will use `roxygen2` to write the documentation.
+In RStudio, a roxygen skeleton can be generated by placing the cursor inside the function, and clicking `Code -> Insert Roxygen Skeleton`:
+
+![](screenshots/06_roxygen_skeleton.png)
+
+This generates a preamble to the function, where each row is prefixed by `#'`.
+Again, we can configure that with the specific information for our function:
+
+::: {.callout-tip appearance="simple" icon="false"}
+```         
+#' Say hello
+#'
+#' @param name A character scalar, representing the name of the person to say
+#'     hello to.
+#'
+#' @return Returns \code{NULL}. A message with a greeting is generated. 
+#' @author Charlotte Soneson
+#' @export
+#'
+#' @examples
+#' say_hello("Jane")
+#' 
+say_hello <- function(name) {
+    message("Hello ", name, "!")
+}
+```
+:::
+
+Note how we indicate what type of value we expect for each argument (`@param`).
+The `@export` line indicates that the function will be exported (i.e., available to use for anyone who installs the package).
+It's also useful to provide simple example code to help a new user get to know your function.
+
+To generate the actual documentation (which will be displayed in R when typing `?say_hello`) we use another package that provides lots of helpful functionality for building and testing R packages, namely `devtools`.
+The `devtools::document()` function creates an `.Rd` file for each documented function in the `man/` folder:
+
+```{r}
+#| eval: false
+
+devtools::document()
+```
+
+![](screenshots/07_rd_file.png)
+
+It also is responsible for populating the `NAMESPACE` file, which lists all the functions that are exported from our package, as well as all functions from other packages that are being imported and used by our functions (so far, we don't have any such functions).
+
+![](screenshots/08_first_namespace.png)
+
+We can go through the same procedure to generate and document our other function (`get_age_in_days`).
+
+::: {.callout-tip appearance="simple" icon="false"}
+```         
+#' Calculate age in days
+#'
+#' Convert the age of an individual in years to the corresponding age in days,
+#' by multiplying with 365.25 and rounding to the nearest integer.
+#'
+#' @param age_years A numeric scalar, representing the age of an individual
+#'     in years.
+#'
+#' @return A numeric scalar representing the age of the individual in days.
+#' @author Charlotte Soneson
+#' @export
+#'
+#' @examples
+#' get_age_in_days(2)
+#'
+get_age_in_days <- function(age_years) {
+    round(age_years * 365.25)
+}
+```
+:::
+
+## Checking the package
+
+In principle, this is all that is needed to generate a package that can be distributed and installed by you and others!
+RStudio provides helpful tooling for checking your package and making sure that it conforms to expected standards and contains all necessary files.
+To run a check within RStudio, we go to the `Build` tab and press `Check`:
+
+![](screenshots/09_check_button.png)
+
+This will call the `devtools::check()` function, which performs lots of formal checks on your package content.
+In the end, it will tell you whether there are ERRORS, WARNINGS, or NOTES that require your attention.
+
+![](screenshots/10_check_output.png)
+
+It is often helpful to run such checks regularly while developing a package, to catch potential issues early on in the process.
+
+At this point, we can also load the package into our R session, to be able to use the functions.
+This can be done either by installing the package into the local R library (`Build -> Install`) followed by `library(exampleRPackage)`, or by typing `devtools::load_all()`, which will simulate the previous action without actually installing the package (this is particularly helpful if you already have an older version of the package installed that you don't want to overwrite with the version you are currently developing, or if you just want to quickly test newly added functionality).
+
+```{r}
+#| eval: false
+
+devtools::load_all()
+```
+
+Once the package is loaded, you can use it's functions and also look up the documentation, e.g. using `?get_age_in_days`.
+
+## Adding a README
+
+A `README` file in your package serves as the first landing spot for a new user, and can be helpful to provide context and installation advice.
+We can easily create a readme with `usethis`:
+
+```{r}
+#| eval: false
+
+usethis::use_readme_md()
+```
+
+::: {.callout-note appearance="simple" icon="false"}
+```         
+> usethis::use_readme_md()
+✔ Writing README.md.
+☐ Modify README.md.
+☐ Update README.md to include installation instructions.
+```
+:::
+
+For now, let's make it very rudimentary:
+
+::: {.callout-tip appearance="simple" icon="false"}
+```         
+# exampleRPackage
+
+This is an example package.
+```
+:::
+
+## Adding argument checks
+
+Next, let's take things one step further and make our functions a bit more robust.
+In particular, the `get_age_in_days()` function will not work if a value that can not be converted to a numeric is provided as input:
+
+```{r}
+#| error: true
+
+get_age_in_days("Charlotte")
+```
+
+While R will return an automatic error message, these are not always easy to parse, and it may not be obvious to the user what the problem is.
+We can add a check to our function, which breaks (with a useful error message) if the input is not numeric:
+
+::: {.callout-tip appearance="simple" icon="false"}
+```         
+get_age_in_days <- function(age_years) {
+    if (!is.numeric(age_years)) {
+        stop("The `age_years` argument must be numeric.")
+    }
+    round(age_years * 365.25)
+}
+```
+:::
+
+Remember to reload your package using `devtools::load_all(".")` to activate the changes to the code.
+
+```{r}
+#| echo: false
+get_age_in_days <- function(age_years) {
+    if (!is.numeric(age_years)) {
+        stop("The `age_years` argument must be numeric.")
+    }
+    round(age_years * 365.25)
+}
+```
+
+```{r}
+#| error: true
+
+get_age_in_days("Charlotte")
+```
+
+## Adding unit tests
+
+Before wrapping up the package, we will also add some unit tests.
+Unit tests are used to check that all functions in the package work as expected and return the right value for a range of different possible input values.
+
+We will set up our unit tests using the `testthat` package.
+For Python, unit testing frameworks similar to `testthat` exist, for example the bundled [unittest](https://docs.python.org/3/library/unittest.html), or the very popular [pytest](https://docs.pytest.org/).
+
+To generate all the required files for `testthat`, we again use `usethis`:
+
+```{r}
+#| eval: false
+
+usethis::use_testthat()
+```
+
+We see that this generates a new `tests/` folder, and adds information to the DESCRIPTION file.
+
+::: {.callout-note appearance="simple" icon="false"}
+```         
+> usethis::use_testthat()
+✔ Adding testthat to Suggests field in DESCRIPTION.
+✔ Adding "3" to Config/testthat/edition.
+✔ Creating tests/testthat/.
+✔ Writing tests/testthat.R.
+☐ Call usethis::use_test() to initialize a basic test file and open it for
+  editing.
+```
+:::
+
+Now we can create a test file for a given function, by **opening the corresponding script** (say, `R/get_age_in_days.R`) and typing
+
+```{r}
+#| eval: false
+
+usethis::use_test()
+```
+
+This opens a new script (in the `tests/testthat` folder) where we can define our tests.
+
+Here is an example of a set of unit tests for this function:
+
+::: {.callout-tip appearance="simple" icon="false"}
+```         
+test_that("get_age_in_days works", {
+
+    ## Expect an error for non-numeric input
+    expect_error(get_age_in_days("name"),
+                 "The `age_years` argument must be numeric")
+
+    ## Check that results are as expected for numeric input
+    expect_equal(get_age_in_days(1), 365)
+
+    ## Check that the function works for vector input
+    expect_equal(get_age_in_days(c(1, 2)), c(365, 730))
+})
+```
+:::
+
+We can run all the tests in this script by clicking on the `Run Tests` button in the top right corner of the script panel.
+We can also run all tests in the package via the `Test` button in the `Build` panel, or using `devtools::test()`, which will show something like this:
+![](screenshots/10b_test_output.png)
+
+The `covr` package provides helpful tools to check the fraction of code in the package that is covered by any of our unit tests (we want this to be as high as possible).
+In particular, running `covr::report()` from the package directory opens an interactive report in the viewer panel, where we can see the overall coverage, as well as the coverage for each function.
+We can also click on a file to see which lines are covered and not.
+
+![](screenshots/11_covr.png)
+
+## Encoding dependencies
+
+In many cases, our package will only work properly if other packages are installed.
+This is the case, for example, any time one of our functions calls a function provided in another package.
+We need to encode this dependency in our package, so that anyone who would like to use the package can prepare accordingly.
+In fact, in many cases dependencies will be automatically installed upon installation of our package, if they are properly encoded.
+
+Let's say, for example, that we want to use the `str_c()` function from the `stringr` package to concatenate "Hello" and the provided name before sending this to the `message()` function in `say_hello()`.
+To achieve this, we need to:
+
+-   add the `stringr` package as a dependency in the package metadata (the `DESCRIPTION` file),
+-   import either the entire package or (preferably) the function(s) we need in the `NAMESPACE` file.
+
+We can achieve this in two steps.
+First, we call
+
+```{r}
+#| eval: false
+
+usethis::use_package("stringr")
+```
+
+This adds `stringr` to the list of dependencies in the `DESCRIPTION` file.
+
+::: {.callout-note appearance="simple" icon="false"}
+```         
+> usethis::use_package("stringr")
+✔ Setting active project to
+  "/Users/charlottesoneson/Desktop/exampleRPackage".
+✔ Adding stringr to Imports field in DESCRIPTION.
+☐ Refer to functions with `stringr::fun()`.
+```
+:::
+
+Next, we add an `@importFrom` statement in the roxygen preamble of our `say_hello()` function, indicating that we want our package to import the `str_c()` function from the `stringr` package.
+We also modify the code of our function to use this new dependency.
+
+::: {.callout-tip appearance="simple" icon="false"}
+```         
+#' Say hello
+#'
+#' @param name A character scalar, representing the name of the person to say
+#'     hello to.
+#'
+#' @return Returns \code{NULL}. A message with a greeting is generated.
+#' @author Charlotte Soneson
+#' @export
+#'
+#' @examples
+#' say_hello("Jane")
+#'
+#' @importFrom stringr str_c
+#'
+say_hello <- function(name) {
+    message(str_c("Hello ", name, "!"))
+}
+```
+:::
+
+After using `devtools` to re-render the documentation (and the `NAMESPACE` file) and re-load the package, we are ready to use our updated function.
+
+```{r}
+#| eval: false
+
+devtools::document()
+devtools::load_all()
+```
+
+## Pushing the package to GitHub
+
+Now that our package is ready to be distributed, we can make it available to others to install.
+There are many ways of distributing software - here we will use GitHub.
+We already initialized a git repository when creating the package (by checking "Create a git repository").
+No worries if you did not do that; you can initialize any directory to become a git repository by typing `git init` into the terminal while being within the directory, and then re-open your RStudio project so that you also get the "Git" panel in RStudio.
+Now, we add and commit all the files that we have modified.
+This can be done from the command line, or using the `Git` panel in RStudio.
+
+![](screenshots/12_git_commit.png)
+
+Note that we did not add the RStudio project file `exampleRPackage.Rproj` and the `.gitignore` file for git tracking.
+It is usually a bad idea to add these kind of files to a possibly shared git repository, as they may contain user-specific settings, which could then overwrite the settings of a collaborator when you both work on the same repository.
+If you would like to "hide" such files from git, you can add them to `.gitignore`, either by opening the context menu on the file in the git panel and choose "Ignore", or by just editing the `.gitignore` file and add file names (possibly containing wildcards) that you want to ignore.
+Once you save the modified `.gitignore` file, the ignored files should disappear from the git panel.
+
+We next create an empty repository on GitHub, and follow the instructions to push our local content there.
+The instruction might look similar to this (you need to replace the GitHub `<user_name>` and the `<repo_name>` to match yours):
+
+::: {.callout-warning}
+```
+git remote add origin git@github.com:<user_name>/<repo_name>.git
+git branch -M main
+git push -u origin main
+```
+:::
+
+It is easiest if your GitHub repository has the same name as your R package, and if the package files (`DESCRIPTION` etc.) are contained in the top level folder of the repository.
+This will make it easiest to discover and install your package, however, it is also possible to use different names for package and repository, and you can also have your package be contained in a sub-folder of the repo.
+For more information on how to work with git in RStudio, see e.g.
+[Happy Git and GitHub for the useR](https://happygitwithr.com/).
+
+![](screenshots/13_github_repo_2025.png)
+
+Now, the package is available for anyone to install, using e.g. the `remotes` (using `remotes::install_github("username/reponame")`) or `pak` (using `pak::pkg_install("username/reponame")`) package to install the package from your GitHub repository.
+
+## Adding a documentation website
+
+The code in the GitHub repository contains all the information needed to use our package (including the documentation of all the functions).
+However, it is not immediately accessible in a user-friendly way.
+A common approach for R packages is to use the `pkgdown` package to generate a documentation website, which will pull information from the various folders in your package.
+For Python packages, there are several possible ways to generate such a website.
+A popular one is based on [`mkdocs`](https://www.mkdocs.org/), a generic website building framework, and its plugin [`mkdocstrings`](https://github.com/mkdocstrings/mkdocstrings), which extracts the function documentation from properly formatted Python docstrings. See the [`mkdocstring` documentation](https://mkdocstrings.github.io/python/) for details, or this [tutorials](https://realpython.com/python-project-documentation-with-mkdocs/) describing the whole process. 
+
+We can build and test a `pkgdown` website for our R package locally:
+
+```{r}
+#| eval: false
+
+pkgdown::build_site()
+```
+
+This will build the site, and open it in a browser window.
+We can see that it pulled the information from the `README` as well as the `DESCRIPTION` files.
+Moreover, the `Reference` tab contains the documentation for the functions.
+
+This website can also be generated automatically every time we push to the GitHub repository, and thereafter displayed for free using GitHub Pages.
+To set this up, we need to use GitHub Actions (a continuous integration/continuous delivery system built into GitHub), and instruct it to perform the necessary steps at each new push.
+We can again use `usethis` to set this up.
+
+```{r}
+#| eval: false
+
+usethis::use_github_action("pkgdown")
+```
+
+::: {.callout-note appearance="simple" icon="false"}
+```         
+> usethis::use_github_action("pkgdown")
+✔ Creating .github/.
+✔ Adding "^\\.github$" to .Rbuildignore.
+✔ Adding "*.html" to .github/.gitignore.
+✔ Creating .github/workflows/.
+✔ Saving "r-lib/actions/examples/pkgdown.yaml@v2" to .github/workflows/pkgdown.yaml.
+☐ Learn more at <https://github.com/r-lib/actions/blob/v2/examples/README.md>.
+```
+:::
+
+Adding the new files (`.github/workflows/pkgdown.yaml`) and pushing to GitHub now activates GitHub Actions.
+
+![](screenshots/14_github_actions.png)
+
+We can follow the progress under the `Actions` tab in the GitHub repository.
+Once finalized, there will be a new branch named `gh-pages` in your repository, which will contain the documentation webpage.
+To display this, we need to activate GitHub Pages in our repository (`Settings -> Pages -> Deploy from a branch -> Select gh-pages -> Save`).
+The settings page will then display the URL to the rendered documentation.
+
+![](screenshots/15_github_pages.png)
+
+Click on the page to view the rendered documentation.
+This will now be updated every time we push to the repository, pulling the latest information from the package files.
+
+# How to distribute packages?
+
+There are many outlets for distributing packages and making them available for others to install and use.
+Many developers use git or other tools for version control during software development.
+Consequently, it is common to find the final software package distributed in a GitHub or GitLab repository.
+In fact, R packages can be installed directly from such repositories, using e.g. the `pak`, `remotes`, `devtools` or `BiocManager` packages.
+Similar functionality is available for other languages (e.g. Python, where you can install a package from GitHub over SSH using `pip install git+ssh://git@github.com/<project_owner>/<project_name>.git/`).
+
+In addition, there are several language-specific package outlets - for R, the two main ones are [CRAN](https://cran.r-project.org/) (which hosts more than 20,000 packages) and [Bioconductor](https://www.bioconductor.org) (which distributes \~2,300 packages, specifically for analysis of biological data).
+Submitting your package for distribution via such a repository can provide additional visibility, and acts as an additional quality assurance since the package undergoes a review process before being included.
+
+# Resources
+
+-   [R Packages](https://r-pkgs.org/) book
+-   [CRAN - The Comprehensive R Archive Network](https://cran.r-project.org/)
+-   [Bioconductor](https://bioconductor.org/)
+-   [Python Packaging User Guide](https://packaging.python.org/en/latest/)
+-   [PyPI - The Python Package Index](https://pypi.org/)
+-   [GitHub Actions](https://docs.github.com/en/actions)
+-   [GitHub Pages](https://docs.github.com/en/pages)
+-   [devtools](https://devtools.r-lib.org/)
+-   [usethis](https://usethis.r-lib.org/)
+-   [pkgdown](https://pkgdown.r-lib.org/)
+-   [roxygen2](https://roxygen2.r-lib.org/)
+-   [testthat](https://testthat.r-lib.org/)
+-   [Ten simple rules for training scientists to make better software](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1012410)
+-   [Blog post on how to develop good R packages](https://masalmon.eu/2017/12/11/goodrpackages/)
+-   [Eleven quick tips for writing a Bioconductor package](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1012856)
