@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Charlotte Soneson, Michael Stadler">
-<meta name="dcterms.date" content="2025-10-28">
+<meta name="dcterms.date" content="2025-11-18">
 
 <title>Packaging your code into an R package</title>
 <style>
@@ -2364,7 +2364,7 @@ window.Quarto = {
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">October 28, 2025</p>
+      <p class="date">November 18, 2025</p>
     </div>
   </div>
   
@@ -2432,19 +2432,19 @@ window.Quarto = {
 <span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="co">            n (int or float): A numeric value</span></span>
 <span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="co">        </span></span>
 <span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="co">        Returns:</span></span>
-<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="co">            The square root of n</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="co">            The square of n</span></span>
 <span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a><span class="co">    &#39;&#39;&#39;</span></span>
 <span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> n<span class="op">**</span><span class="dv">2</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 <p>And here one of an R function with a roxygen preamble (we will see this in more detail later):</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co">#&#39; Square of a number</span></span>
+<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co">#&#39; Square each number in a vector</span></span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="co">#&#39; </span></span>
 <span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="co">#&#39; Take a numeric vector \code{n} and calculate the square of each element.</span></span>
 <span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="co">#&#39;</span></span>
 <span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="co">#&#39; @param n A numeric vector</span></span>
 <span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="co">#&#39; </span></span>
-<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="co">#&#39; @return A numeric vector giving the sqaured values of the input vector.</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="co">#&#39; @return A numeric vector giving the squared values of the input vector.</span></span>
 <span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a><span class="co">#&#39; </span></span>
 <span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="co">#&#39; @export</span></span>
 <span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a><span class="co">#&#39; </span></span>
@@ -2873,7 +2873,7 @@ git push -u origin main</code></pre>
 </section>
 <section id="adding-a-documentation-website" class="level2">
 <h2 class="anchored" data-anchor-id="adding-a-documentation-website">Adding a documentation website</h2>
-<p>The code in the GitHub repository contains all the information needed to use our package (including the documentation of all the functions). However, it is not immediately accessible in a user-friendly way. A common approach for R packages is to use the <code>pkgdown</code> package to generate a documentation website, which will pull information from the various folders in your package. For Python packages, there are several possible ways to generate such a website. A popular one is based on <a href="https://www.mkdocs.org/"><code>mkdocs</code></a>, a generic website building framework, and its plugin <a href="https://github.com/mkdocstrings/mkdocstrings"><code>mkdocstrings</code></a>, which extracts the function documentation from properly formatted Python docstrings. See the <a href="https://mkdocstrings.github.io/python/"><code>mkdocstring</code> documentation</a> for details, or this <a href="https://realpython.com/python-project-documentation-with-mkdocs/">tutorials</a> describing the whole process.</p>
+<p>The code in the GitHub repository contains all the information needed to use our package (including the documentation of all the functions). However, it is not immediately accessible in a user-friendly way. A common approach for R packages is to use the <code>pkgdown</code> package to generate a documentation website, which will pull information from the various folders in your package. For Python packages, there are several possible ways to generate such a website. A popular one is based on <a href="https://www.mkdocs.org/"><code>mkdocs</code></a>, a generic website building framework, and its plugin <a href="https://github.com/mkdocstrings/mkdocstrings"><code>mkdocstrings</code></a>, which extracts the function documentation from properly formatted Python docstrings. See the <a href="https://mkdocstrings.github.io/python/"><code>mkdocstring</code> documentation</a> for details, or this <a href="https://realpython.com/python-project-documentation-with-mkdocs/">tutorial</a> describing the whole process.</p>
 <p>We can build and test a <code>pkgdown</code> website for our R package locally:</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb36"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a>pkgdown<span class="sc">::</span><span class="fu">build_site</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
