@@ -89,7 +89,7 @@ def square(n):
             n (int or float): A numeric value
         
         Returns:
-            The square root of n
+            The square of n
     '''
     return n**2
 ```
@@ -98,13 +98,13 @@ And here one of an R function with a roxygen preamble (we will see this in more 
 
 ```{r}
 #| eval: false
-#' Square of a number
+#' Square each number in a vector
 #' 
 #' Take a numeric vector \code{n} and calculate the square of each element.
 #'
 #' @param n A numeric vector
 #' 
-#' @return A numeric vector giving the sqaured values of the input vector.
+#' @return A numeric vector giving the squared values of the input vector.
 #' 
 #' @export
 #' 
@@ -626,7 +626,7 @@ The code in the GitHub repository contains all the information needed to use our
 However, it is not immediately accessible in a user-friendly way.
 A common approach for R packages is to use the `pkgdown` package to generate a documentation website, which will pull information from the various folders in your package.
 For Python packages, there are several possible ways to generate such a website.
-A popular one is based on [`mkdocs`](https://www.mkdocs.org/), a generic website building framework, and its plugin [`mkdocstrings`](https://github.com/mkdocstrings/mkdocstrings), which extracts the function documentation from properly formatted Python docstrings. See the [`mkdocstring` documentation](https://mkdocstrings.github.io/python/) for details, or this [tutorials](https://realpython.com/python-project-documentation-with-mkdocs/) describing the whole process. 
+A popular one is based on [`mkdocs`](https://www.mkdocs.org/), a generic website building framework, and its plugin [`mkdocstrings`](https://github.com/mkdocstrings/mkdocstrings), which extracts the function documentation from properly formatted Python docstrings. See the [`mkdocstring` documentation](https://mkdocstrings.github.io/python/) for details, or this [tutorial](https://realpython.com/python-project-documentation-with-mkdocs/) describing the whole process. 
 
 We can build and test a `pkgdown` website for our R package locally:
 
